@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-secrets
+  namespace: keycloak
+type: Opaque
+stringData:
+  KEYCLOAK_ADMIN_PASSWORD: "keycloak-admin-1234"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:24.0
+          args:
+            - start-dev
+          env:
+            - name: KEYCLOAK_ADMIN
+              value: admin
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-secrets
+                  key: KEYCLOAK_ADMIN_PASSWORD
+            - name: KC_PROXY_HEADERS
+              value: "xforwarded"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            # Split-horizon fix: the Backstage backend pod (in-cluster) and the
+            # browser (Windows) reach Keycloak through different network paths.
+            # Pods resolve `host.docker.internal` reliably via Docker Desktop's
+            # embedded DNS (this is dynamic/live — a hostAliases static-IP copy
+            # of it was tried and proved flaky across pod restarts, so don't
+            # reintroduce that). The remaining piece is Windows: Docker
+            # Desktop's installer already put `host.docker.internal` in the
+            # Windows hosts file, but pointing at the machine's real LAN IP,
+            # which WSL2 does NOT forward `kubectl port-forward` ports to
+            # (only 127.0.0.1 is auto-forwarded). Fix: override that one
+            # Windows hosts-file line to `127.0.0.1 host.docker.internal`.
+            - name: KC_HOSTNAME_URL
+              value: "http://host.docker.internal:8082"
+            - name: KC_HOSTNAME_STRICT
+              value: "true"
+            - name: KC_HOSTNAME_STRICT_BACKCHANNEL
+              value: "true"
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: keycloak
+spec:
+  selector:
+    app: keycloak
+  ports:
+    - port: 8080
+      targetPort: 8080

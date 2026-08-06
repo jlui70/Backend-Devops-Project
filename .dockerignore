@@ -1,0 +1,7 @@
+.git
+.yarn/cache
+.yarn/unplugged
+node_modules
+packages/*/node_modules
+plugins/*/node_modules
+dist-types
