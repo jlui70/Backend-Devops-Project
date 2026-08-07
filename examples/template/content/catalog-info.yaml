@@ -4,5 +4,6 @@ metadata:
   name: ${{ values.name | dump }}
 spec:
   type: service
-  owner: user:guest
-  lifecycle: experimental
+  owner: ${{ values.owner }}
+  system: ${{ values.system }}
+  lifecycle: ${{ values.lifecycle }}

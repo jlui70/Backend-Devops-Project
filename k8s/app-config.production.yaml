@@ -1,19 +1,29 @@
 app:
-  # Should be the same as backend.baseUrl when using the `app-backend` plugin.
+  title: Scaffolded Backstage App
   baseUrl: http://localhost:7007
+
+  # Enable all packages by default, this will discover packages from packages/app/package.json
+  packages: all
+
+  extensions:
+    # Configure the catalog index page to be the root page, this is normally mounted on /catalog
+    - page:catalog:
+        config:
+          path: /
+
+organization:
+  name: My Company
 
 backend:
-  # Note that the baseUrl should be the URL that the browser and other clients
-  # should use when communicating with the backend, i.e. it needs to be
-  # reachable not just from within the backend host, but from all of your
-  # callers. When its value is "http://localhost:7007", it's strictly private
-  # and can't be reached by others.
   baseUrl: http://localhost:7007
-  # The listener can also be expressed as a single <host>:<port> string. In this case we bind to
-  # all interfaces, the most permissive setting. The right value depends on your specific deployment.
-  listen: ':7007'
-
-  # config options: https://node-postgres.com/apis/client
+  listen:
+    port: 7007
+  csp:
+    connect-src: ["'self'", 'http:', 'https:']
+  cors:
+    origin: http://localhost:7007
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
   database:
     client: pg
     connection:
@@ -21,12 +31,25 @@ backend:
       port: ${POSTGRES_PORT}
       user: ${POSTGRES_USER}
       password: ${POSTGRES_PASSWORD}
-      # https://node-postgres.com/features/ssl
-      # you can set the sslmode configuration option via the `PGSSLMODE` environment variable
-      # see https://www.postgresql.org/docs/current/libpq-ssl.html Table 33.1. SSL Mode Descriptions (e.g. require)
-      # ssl:
-      #   ca: # if you have a CA file and want to verify it you can uncomment this section
-      #     $file: <file-path>/ca/server.crt
+  actions:
+    pluginSources:
+      - auth
+      - catalog
+      - scaffolder
+
+integrations:
+  github:
+    - host: github.com
+      token: ${GITHUB_TOKEN}
+
+proxy:
+
+techdocs:
+  builder: 'local'
+  generator:
+    runIn: 'docker'
+  publisher:
+    type: 'local'
 
 auth:
   environment: production
@@ -34,63 +57,22 @@ auth:
     secret: ${AUTH_SESSION_SECRET}
   providers:
     guest: {}
-    # Filled in during Fase 3 once the Keycloak realm/client exist.
-    # NOTE: metadataUrl must be reachable from the backend pod (in-cluster
-    # DNS); see the split-horizon task for how this reconciles with the
-    # browser-facing URL used by packages/app/src/apis.tsx.
     oidc:
       production:
         metadataUrl: ${KEYCLOAK_METADATA_URL}
         clientId: ${KEYCLOAK_CLIENT_ID}
         clientSecret: ${KEYCLOAK_CLIENT_SECRET}
+        # Default is "none", which never shows a login form (only useful for
+        # silent session checks) and immediately fails with login_required
+        # when there's no existing Keycloak session. "auto" lets Keycloak
+        # decide, so the manual sign-in click actually shows the login page.
         prompt: auto
+  clientIdMetadataDocuments:
+    enabled: false
 
-catalog:
-  providers:
-    # Keycloak user/group sync (catalog-backend-module-keycloak)
-    keycloakOrg:
-      default:
-        baseUrl: ${KEYCLOAK_BASE_URL}
-        loginRealm: ${KEYCLOAK_REALM}
-        realm: ${KEYCLOAK_REALM}
-        clientId: ${KEYCLOAK_CLIENT_ID}
-        clientSecret: ${KEYCLOAK_CLIENT_SECRET}
-        schedule:
-          frequency: { minutes: 30 }
-          timeout: { minutes: 3 }
-    # GitHub catalog discovery (catalog-backend-module-github)
-    github:
-      default:
-        organization: ${GITHUB_ORG}
-        catalogPath: '/catalog-info.yaml'
-        schedule:
-          frequency: { minutes: 30 }
-          timeout: { minutes: 3 }
-
-  # Overrides the default list locations from app-config.yaml as these contain example data.
-  # See https://backstage.io/docs/features/software-catalog/#adding-components-to-the-catalog for more details
-  # on how to get entities into the catalog.
-  locations:
-    # Local example data, replace this with your production config, these are intended for demo use only.
-    # File locations are relative to the backend process, typically in a deployed context, such as in a Docker container, this will be the root
-    - type: file
-      target: ./examples/entities.yaml
-
-    # Local example template
-    - type: file
-      target: ./examples/template/template.yaml
-      rules:
-        - allow: [Template]
-
-    # Local example organizational data
-    - type: file
-      target: ./examples/org.yaml
-      rules:
-        - allow: [User, Group]
+scaffolder:
 
 argocd:
-  username: ${ARGOCD_USERNAME}
-  password: ${ARGOCD_PASSWORD}
   # Number of history entries to fetch per app. The plugin does
   # `history.slice(0, revisionsToLoad)`, so a value of -1 (its default)
   # drops the last entry via JS's negative-index slice semantics instead
@@ -104,3 +86,53 @@ argocd:
         - name: default
           url: ${ARGOCD_URL}
           token: ${ARGOCD_AUTH_TOKEN}
+
+catalog:
+  import:
+    entityFilename: catalog-info.yaml
+    pullRequestBranchName: backstage-integration
+  rules:
+    - allow: [Component, System, API, Resource, Location]
+  providers:
+    keycloakOrg:
+      default:
+        baseUrl: ${KEYCLOAK_BASE_URL}
+        loginRealm: ${KEYCLOAK_REALM}
+        realm: ${KEYCLOAK_REALM}
+        clientId: ${KEYCLOAK_CLIENT_ID}
+        clientSecret: ${KEYCLOAK_CLIENT_SECRET}
+        schedule:
+          frequency: { minutes: 30 }
+          timeout: { minutes: 3 }
+    github:
+      default:
+        organization: ${GITHUB_ORG}
+        catalogPath: '/catalog-info.yaml'
+        schedule:
+          frequency: { minutes: 30 }
+          timeout: { minutes: 3 }
+  locations:
+    # Caminhos relativos ao cwd do processo dentro do container (/app), NÃO
+    # ao layout do monorepo em dev (que seria ../../examples/...). O
+    # Dockerfile copia examples/ para /app/examples nesse mesmo nível.
+    - type: file
+      target: ./examples/entities.yaml
+
+    - type: file
+      target: ./examples/template/template.yaml
+      rules:
+        - allow: [Template]
+
+    - type: file
+      target: ./examples/org.yaml
+      rules:
+        - allow: [User, Group]
+
+kubernetes:
+
+permission:
+  enabled: true
+
+mcpActions:
+  name: 'My Company Backstage'
+  description: 'Tools for managing your software catalog, creating new services from templates, and exploring your developer portal'

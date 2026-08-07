@@ -39,8 +39,11 @@ RUN yarn workspaces focus --all --production
 COPY --from=build /app/packages/backend/dist/bundle.tar.gz ./
 RUN tar xzf bundle.tar.gz && rm bundle.tar.gz
 
-# 5. Copia as configurações do app e ajusta as permissões do usuário node
+# 5. Copia as configurações do app e os exemplos do catálogo/scaffolder
+#    (examples/ é referenciado pelas locations do catalog em app-config, ex.:
+#    examples/template/template.yaml para o botão "Create" funcionar)
 COPY app-config.yaml ./
+COPY --from=build /app/examples ./examples
 RUN chown -R node:node /app
 
 USER node

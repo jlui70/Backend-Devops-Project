@@ -7,6 +7,14 @@ metadata:
 spec:
   owner: guests
 ---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: platform-engineering
+  description: Sistemas e ferramentas da plataforma interna (Backstage, ArgoCD, Keycloak)
+spec:
+  owner: group:default/platform-admins
+---
 # https://backstage.io/docs/features/software-catalog/descriptor-format#kind-component
 apiVersion: backstage.io/v1alpha1
 kind: Component

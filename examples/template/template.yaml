@@ -6,7 +6,7 @@ metadata:
   title: Example Node.js Template
   description: An example template for the scaffolder that creates a simple Node.js service
 spec:
-  owner: user:guest
+  owner: group:default/platform-admins
   type: service
 
   # These parameters are used to generate the input form in the frontend, and are
@@ -15,6 +15,8 @@ spec:
     - title: Fill in some steps
       required:
         - name
+        - owner
+        - system
       properties:
         name:
           title: Name
@@ -23,6 +25,31 @@ spec:
           ui:autofocus: true
           ui:options:
             rows: 5
+        owner:
+          title: Owner
+          type: string
+          description: Team that will own and maintain this component
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind: Group
+        system:
+          title: System
+          type: string
+          description: System this component belongs to
+          ui:field: EntityPicker
+          ui:options:
+            catalogFilter:
+              kind: System
+        lifecycle:
+          title: Lifecycle
+          type: string
+          description: Lifecycle stage of the component
+          default: experimental
+          enum:
+            - experimental
+            - production
+            - deprecated
     - title: Choose a location
       required:
         - repoUrl
@@ -46,6 +73,9 @@ spec:
         url: ./content
         values:
           name: ${{ parameters.name }}
+          owner: ${{ parameters.owner }}
+          system: ${{ parameters.system }}
+          lifecycle: ${{ parameters.lifecycle }}
 
     # This step publishes the contents of the working directory to GitHub.
     # If you or your organization prefer another default branch name over 'main'

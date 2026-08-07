@@ -1,5 +1,10 @@
 {
   "name": "${{ values.name }}",
   "private": true,
-  "dependencies": {}
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
 }
