@@ -47,7 +47,8 @@ site
 *-credentials.yaml
 
 # Course material kept local-only for now (not ready to publish publicly)
-docs/
+docs/*
+!docs/00 - Guia Completo de Instalação (Reprodução do Zero).md
 
 # vscode database functionality support files
 *.session.sql
