@@ -7,6 +7,35 @@ type: Opaque
 stringData:
   KEYCLOAK_ADMIN_PASSWORD: "keycloak-admin-1234"
 ---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: keycloak-storage
+  labels:
+    type: local
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: '/mnt/data/keycloak'
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: keycloak-storage-claim
+  namespace: keycloak
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -22,6 +51,22 @@ spec:
       labels:
         app: keycloak
     spec:
+      # 🐛6 fix: /opt/keycloak/data (onde o modo start-dev grava o banco H2
+      # baseado em arquivo) agora está num PVC, então o realm/client/usuário
+      # sobrevivem a restart do pod. O initContainer só ajusta a permissão do
+      # hostPath recém-criado (fica root:root 0755 por padrão) pro grupo 0
+      # conseguir escrever nele — a imagem do Keycloak roda como uid 1000/gid 0
+      # e já espera esse diretório com permissão de grupo (ver drwxrwxr-x atual).
+      initContainers:
+        - name: fix-permissions
+          image: busybox:1.36
+          command: ['sh', '-c', 'chmod -R g+rwX /data']
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /data
+              name: keycloak-data
+              subPath: keycloak-data
       containers:
         - name: keycloak
           image: quay.io/keycloak/keycloak:24.0
@@ -60,6 +105,10 @@ spec:
               value: "true"
           ports:
             - containerPort: 8080
+          volumeMounts:
+            - mountPath: /opt/keycloak/data
+              name: keycloak-data
+              subPath: keycloak-data
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -76,6 +125,10 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
+      volumes:
+        - name: keycloak-data
+          persistentVolumeClaim:
+            claimName: keycloak-storage-claim
 ---
 apiVersion: v1
 kind: Service
